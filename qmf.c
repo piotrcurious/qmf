@@ -133,3 +133,19 @@ void daub(double *h, int n, int *seq)
    
 
 }
+// Function to perform quadrature mirror filtering using debauchies wavelet coefficients
+ void qmf(double *x, double *y, int len_x, int len_y, double *h) { int i, j;
+
+// Convolve and downsample input signal with filter coefficients
+for (i = 0; i < len_y; i++)
+{
+    y[i] = 0.0;
+    for (j = 0; j < N; j++)
+    {
+        if (2*i-j >= 0 && 2*i-j < len_x)
+        {
+            y[i] += x[2*i-j] * h[j];
+        }
+    }
+}
+}
