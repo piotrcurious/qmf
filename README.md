@@ -5,4 +5,6 @@ It has many problems but it is interesting anyway, especially with the verilog v
 Feel free to experiment with it. 
 I would be glad to make it run on sth like Arduino
 
- i would be happy to see fixes :)
+It still lacks the core qmf function:)
+And ofc it is shuffled badly .
+
