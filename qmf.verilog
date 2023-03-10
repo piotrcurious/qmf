@@ -1,0 +1,203 @@
+// QMF implementation using debauchies wavelet derived from LFSR as core
+
+// Based on https://www.mathworks.com/help/wavelet/ref/dwt.html
+
+// Define the LFSR parameters
+
+`define POLY 32'h80000057 // Polynomial for LFSR
+
+`define INIT 32'h00000001 // Initial state for LFSR
+
+`define TAPS 5'd32        // Number of taps for LFSR
+
+// Define the QMF parameters
+
+`define N 3'd8            // Length of filter coefficients
+
+`define M 3'd4            // Decimation factor
+
+// Define the input signal parameters
+
+`define LEN 7'd64         // Length of input signal
+
+module lfsr(
+
+    input clk,
+
+    input rst,
+
+    output reg [31:0] state,
+
+    output reg seq
+
+);
+
+always @(posedge clk or posedge rst) begin
+
+    if (rst) begin
+
+        state <= `INIT;   // Initialize state to INIT 
+
+        seq <= 1'b0;      // Initialize seq to zero 
+
+    end else begin
+
+        seq <= state[0];  // Get LSB (i.e., the output bit) and store in seq 
+
+        state <= {state[30:0],1'b0}; // Shift register 
+
+        if (seq) begin    // If the output bit is 1, apply toggle mask 
+
+            state <= state ^ `POLY;
+
+        end 
+
+    end 
+
+end 
+
+endmodule 
+
+module normalize(
+
+    input clk,
+
+    input rst,
+
+    input [31:0] vec[`N-1:0],
+
+    output reg [31:0] norm_vec[`N-1:0]
+
+);
+
+reg [63:0] norm;           // Euclidean norm 
+
+reg [63:0] sum;            // Sum of squares 
+
+reg [31:0] epsilon;        // Small value to avoid divide by zero 
+
+integer i;                 // Loop index 
+
+always @(posedge clk or posedge rst) begin
+
+    if (rst) begin
+
+        norm <= 64'h0000000000000000;   // Initialize norm to zero 
+
+        sum <= 64'h0000000000000000;    // Initialize sum to zero 
+
+        epsilon <= 32'h3E6DB6DB;        // Initialize epsilon to 1e-9 in fixed point format (Q16.16)
+
+        for (i = 0; i < `N; i = i + 1) begin
+
+            norm_vec[i] <= 32'h00000000;// Initialize norm_vec elements to zero  
+
+        end  
+
+    end else begin
+
+        for (i = 0; i < `N; i = i + 1) begin
+
+            sum <= sum + vec[i]*vec[i];     // Sum of squares 
+
+        end  
+
+        
+
+       norm <= $sqrt(sum);                  // Square root of sum of squares 
+
+        
+
+       for (i = 0; i < `N; i = i + 1) begin   
+
+           norm_vec[i] <= vec[i]/(norm + epsilon);   // Divide each element by norm + epsilon  
+
+       end  
+
+        
+
+   end  
+
+end  
+
+endmodule 
+
+module daub(
+
+    input clk,
+
+    input rst,
+
+    input [31:0] seq[`N-1:0],
+
+    output reg [31:0] h[`N-1:0]
+
+);
+
+reg [31:0] beta[`N-1:0];   // Beta coefficients 
+
+reg [31:0] alpha[`N-1:0];  // Alpha coefficients 
+
+reg [31:0] gamma[`N-1:0];  // Gamma coefficients 
+
+reg [31:0] delta[`N-1:0];  // Delta coefficients 
+
+reg [31:0] zeta[`N/2-1:0]; // Zeta coefficients 
+
+reg [31:0] eta[`N/2-1:0];  // Eta coefficients 
+
+integer i;                 // Loop index 
+
+always @(posedge clk or posedge rst) begin
+
+    if (rst) begin
+
+        for (i = 0; i < `N; i = i + 1) begin
+
+            beta[i] <= 32'h00000000;     // Initialize beta elements to zero  
+
+            alpha[i] <= 32'h00000000;    // Initialize alpha elements to zero  
+
+            gamma[i] <= 32'h00000000;    // Initialize gamma elements to zero  
+
+            delta[i] <= 32'h00000000;    // Initialize delta elements to zero  
+
+            h[i] <= 32'h00000000;        // Initialize h elements to zero  
+
+        end  
+
+        for (i = 0; i < `N/2; i = i + 1) begin
+
+            zeta[i] <= 32'h00000000;     // Initialize zeta elements to zero  
+
+            eta[i] <= 32'h00000000;      // Initialize eta elements to zero  
+
+        end  
+
+    end else begin
+
+        for (i = 0; i < `N; i = i + 1) begin
+
+            beta[i] <= seq[i][31]? -vec[i]: vec[i];     // Map sequence to +/- values and store in beta array 
+
+        end  
+
+        normalize(clk,rst,beta,beta);                   // Normalize beta array 
+
+        for (i = `N-1 ; i >= `N/2 ; i = i - 1) begin
+
+            alpha[i] <= beta[i-`N/2]-beta[i];           // Compute alpha array from beta array 
+
+            gamma[i-`N/2]<=beta[i-`N/2]+beta[i];         //
+
+        end  
+
+        normalize(clk,rst,alpha,alpha);                 //
+
+        
+
+    end  
+
+end  
+
+endmodule 
