@@ -8,7 +8,7 @@ int main() {
     double h[N];
     daub(seq, h);
 
-    // 1. Full Frequency Response and Split Data
+    // 1. Full Frequency Response and Split Data (H(e^jw) and G(e^jw))
     FILE *fp_sweep = fopen("sweep.csv", "w");
     fprintf(fp_sweep, "freq,low_mag,low_phase,high_mag,high_phase,total_mag\n");
     for (double f = 0; f <= 0.5; f += 0.001) {
@@ -29,14 +29,14 @@ int main() {
         double mag_h = sqrt(real_h * real_h + imag_h * imag_h);
         double phase_h = atan2(imag_h, real_h);
 
-        // Sum of squared magnitudes for perfect reconstruction check (should be constant)
+        // Sum of magnitudes squared should be 2 for PR QMF
         double total_mag = sqrt(mag_l * mag_l + mag_h * mag_h);
 
         fprintf(fp_sweep, "%f,%f,%f,%f,%f,%f\n", f, mag_l, phase_l, mag_h, phase_h, total_mag);
     }
     fclose(fp_sweep);
 
-    // 2. Reconstruction Data
+    // 2. Reconstruction Data (Middle part for MSE)
     double x[LEN];
     for (int i = 0; i < LEN; i++) {
         x[i] = sin(2 * M_PI * i / 10.0) + 0.5 * sin(2 * M_PI * i / 3.0);

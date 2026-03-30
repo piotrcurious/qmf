@@ -100,32 +100,29 @@ void daub(const double *seq, double *h) {
     normalize(h, N);
 
     // To be a valid scaling function, sum of coefficients should be sqrt(2)
-    double sum = 0;
-    for (int i = 0; i < N; i++) sum += h[i];
     double target_sum = sqrt(2.0);
-    double correction = (target_sum - sum) / N;
-    for (int i = 0; i < N; i++) h[i] += correction;
-    normalize(h, N);
 
     // Iteratively enforce orthogonality to shifts by 2 (QMF condition: sum(h[n]*h[n-2k]) = delta[k])
-    // Increase iterations and refine step size for better convergence
-    for (int iter = 0; iter < 500; iter++) {
+    // Refine algorithm for better stability and precision
+    for (int iter = 0; iter < 1000; iter++) {
+        // Enforce orthogonality to shifts by 2
         for (int k = 1; k < N / 2; k++) {
             double dot = 0;
             for (int i = 0; i < N - 2 * k; i++) {
                 dot += h[i] * h[i + 2 * k];
             }
             // Gradient descent step
-            double step = 0.1 / (iter / 100.0 + 1.0);
+            double step = 0.05 / (iter / 200.0 + 1.0);
             for (int i = 0; i < N - 2 * k; i++) {
                 h[i] -= step * dot * h[i + 2 * k];
                 h[i + 2 * k] -= step * dot * h[i];
             }
         }
+
         // Re-enforce sum condition and normalization
-        sum = 0;
+        double sum = 0;
         for (int i = 0; i < N; i++) sum += h[i];
-        correction = (target_sum - sum) / N;
+        double correction = (target_sum - sum) / N;
         for (int i = 0; i < N; i++) h[i] += correction;
         normalize(h, N);
     }
@@ -142,12 +139,32 @@ void daub_shift(const double *seq, double *h, double shift) {
         h[i] *= cos(M_PI * shift * i);
     }
     normalize(h, N);
+
+    // Re-optimize slightly after shift to maintain orthogonality
+    double target_sum = sqrt(2.0);
+    for (int iter = 0; iter < 200; iter++) {
+        for (int k = 1; k < N / 2; k++) {
+            double dot = 0;
+            for (int i = 0; i < N - 2 * k; i++) dot += h[i] * h[i + 2 * k];
+            double step = 0.02;
+            for (int i = 0; i < N - 2 * k; i++) {
+                h[i] -= step * dot * h[i + 2 * k];
+                h[i + 2 * k] -= step * dot * h[i];
+            }
+        }
+        double sum = 0;
+        for (int i = 0; i < N; i++) sum += h[i];
+        double correction = (target_sum - sum) / N;
+        for (int i = 0; i < N; i++) h[i] += correction;
+        normalize(h, N);
+    }
 }
 
 // QMF analysis bank implementation
 void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
     // h is the low-pass filter (scaling coefficients)
     // g is the high-pass filter (wavelet coefficients)
+    // For QMF perfect reconstruction: g[n] = (-1)^n * h[N-1-n]
     double g[N];
     for (int i = 0; i < N; i++) {
         g[i] = ((i % 2) == 0 ? 1 : -1) * h[N - 1 - i];
@@ -175,16 +192,16 @@ void qmf_synth(const double *yl, const double *yh, int len_y, const double *h, d
     }
 
     int len_x = 2 * len_y;
-    for (int i = 0; i < len_x; i++) {
-        xr[i] = 0;
-    }
+    for (int i = 0; i < len_x; i++) xr[i] = 0;
 
     for (int i = 0; i < len_y; i++) {
         for (int j = 0; j < N; j++) {
             int idx = 2 * i + j - (N - 2);
             if (idx >= 0 && idx < len_x) {
-                xr[idx] += yl[i] * h[N - 1 - j];
-                xr[idx] += yh[i] * g[N - 1 - j];
+                // Synthesis uses h[n] and g[n] with upsampling
+                // Perfect reconstruction condition: H(z)H(z^-1) + G(z)G(z^-1) = 2
+                xr[idx] += yl[i] * h[j];
+                xr[idx] += yh[i] * g[j];
             }
         }
     }
