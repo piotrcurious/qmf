@@ -3,17 +3,13 @@
 #include <stdlib.h>
 #include <math.h>
 
-// Global state for LFSR
-static uint64_t state;
-static uint32_t pos;
-
 // Define tap positions for 64-bit LFSR
 #define TAP1 63
 #define TAP2 62
 #define TAP3 60
 #define TAP4 59
 
-// Define feedback masks for each byte
+// Define feedback masks for each byte using ULL for 64-bit safety
 #define MASK0 ((1ULL << (TAP1 % 8)) ^ (1ULL << (TAP2 % 8)) ^ (1ULL << (TAP3 % 8)) ^ (1ULL << (TAP4 % 8)))
 #define MASK1 ((MASK0 << 8) | (MASK0 >> (64 - 8)))
 #define MASK2 ((MASK1 << 8) | (MASK1 >> (64 - 8)))
@@ -26,32 +22,32 @@ static uint32_t pos;
 #define LEFT   'L'
 #define RIGHT 'R'
 
-void init_lfsr(uint64_t seed, uint32_t start_pos) {
-    state = seed;
-    pos = start_pos;
+void init_lfsr(LFSR_Context *ctx, uint64_t seed, uint32_t start_pos) {
+    ctx->state = seed;
+    ctx->pos = start_pos;
 }
 
-int shift_lfsr(char dir) {
+int shift_lfsr(LFSR_Context *ctx, char dir) {
     int out_bit;
     if (dir == LEFT) {
-        out_bit = (state >> TAP1) & 1;
-        state <<= 1;
-        switch (pos / 8) {
-            case 0: state ^= MASK0 & (uint64_t)-(int64_t)out_bit; break;
-            case 1: state ^= MASK1 & (uint64_t)-(int64_t)out_bit; break;
-            case 2: state ^= MASK2 & (uint64_t)-(int64_t)out_bit; break;
-            case 3: state ^= MASK3 & (uint64_t)-(int64_t)out_bit; break;
-            case 4: state ^= MASK4 & (uint64_t)-(int64_t)out_bit; break;
-            case 5: state ^= MASK5 & (uint64_t)-(int64_t)out_bit; break;
-            case 6: state ^= MASK6 & (uint64_t)-(int64_t)out_bit; break;
-            case 7: state ^= MASK7 & (uint64_t)-(int64_t)out_bit; break;
+        out_bit = (ctx->state >> TAP1) & 1;
+        ctx->state <<= 1;
+        switch (ctx->pos / 8) {
+            case 0: ctx->state ^= MASK0 & (uint64_t)-(int64_t)out_bit; break;
+            case 1: ctx->state ^= MASK1 & (uint64_t)-(int64_t)out_bit; break;
+            case 2: ctx->state ^= MASK2 & (uint64_t)-(int64_t)out_bit; break;
+            case 3: ctx->state ^= MASK3 & (uint64_t)-(int64_t)out_bit; break;
+            case 4: ctx->state ^= MASK4 & (uint64_t)-(int64_t)out_bit; break;
+            case 5: ctx->state ^= MASK5 & (uint64_t)-(int64_t)out_bit; break;
+            case 6: ctx->state ^= MASK6 & (uint64_t)-(int64_t)out_bit; break;
+            case 7: ctx->state ^= MASK7 & (uint64_t)-(int64_t)out_bit; break;
         }
-        pos = (pos + 1) % 64;
+        ctx->pos = (ctx->pos + 1) % 64;
     } else if (dir == RIGHT) {
-        out_bit = state & 1;
-        state >>= 1;
+        out_bit = ctx->state & 1;
+        ctx->state >>= 1;
         uint64_t mask = 0;
-        switch (pos / 8) {
+        switch (ctx->pos / 8) {
             case 0: mask = MASK7; break;
             case 1: mask = MASK6; break;
             case 2: mask = MASK5; break;
@@ -61,22 +57,22 @@ int shift_lfsr(char dir) {
             case 6: mask = MASK1; break;
             case 7: mask = MASK0; break;
         }
-        if (out_bit) state |= mask;
-        else state &= ~mask;
-        pos = (pos + 63) % 64;
+        if (out_bit) ctx->state |= mask;
+        else ctx->state &= ~mask;
+        ctx->pos = (ctx->pos + 63) % 64;
     } else {
         return -1;
     }
     return out_bit;
 }
 
-uint8_t shift_lfsr_n(char dir, int n) {
+uint8_t shift_lfsr_n(LFSR_Context *ctx, char dir, int n) {
     uint8_t out_byte = 0;
     for (int i = 0; i < n; i++) {
         if (dir == LEFT) {
-            out_byte = (out_byte << 1) | shift_lfsr(dir);
+            out_byte = (out_byte << 1) | shift_lfsr(ctx, dir);
         } else {
-            out_byte = (out_byte >> 1) | (shift_lfsr(dir) << 7);
+            out_byte = (out_byte >> 1) | (shift_lfsr(ctx, dir) << 7);
         }
     }
     return out_byte;
@@ -133,11 +129,10 @@ void daub(const double *seq, double *h) {
     }
 }
 
-// QMF bank implementation
+// QMF analysis bank implementation
 void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
     // h is the low-pass filter (scaling coefficients)
     // g is the high-pass filter (wavelet coefficients)
-    // g[n] = (-1)^n * h[N-1-n]
     double g[N];
     for (int i = 0; i < N; i++) {
         g[i] = ((i % 2) == 0 ? 1 : -1) * h[N - 1 - i];
@@ -148,10 +143,33 @@ void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
         yl[i] = 0;
         yh[i] = 0;
         for (int j = 0; j < N; j++) {
-            int idx = 2 * i + 1 - j; // Applying filter with downsampling
+            int idx = 2 * i + 1 - j;
             if (idx >= 0 && idx < len_x) {
                 yl[i] += x[idx] * h[j];
                 yh[i] += x[idx] * g[j];
+            }
+        }
+    }
+}
+
+// QMF synthesis bank implementation
+void qmf_synth(const double *yl, const double *yh, int len_y, const double *h, double *xr) {
+    double g[N];
+    for (int i = 0; i < N; i++) {
+        g[i] = ((i % 2) == 0 ? 1 : -1) * h[N - 1 - i];
+    }
+
+    int len_x = 2 * len_y;
+    for (int i = 0; i < len_x; i++) {
+        xr[i] = 0;
+    }
+
+    for (int i = 0; i < len_y; i++) {
+        for (int j = 0; j < N; j++) {
+            int idx = 2 * i + j - (N - 2);
+            if (idx >= 0 && idx < len_x) {
+                xr[idx] += yl[i] * h[N - 1 - j];
+                xr[idx] += yh[i] * g[N - 1 - j];
             }
         }
     }

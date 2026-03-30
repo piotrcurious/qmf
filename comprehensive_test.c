@@ -4,11 +4,12 @@
 #include <math.h>
 
 void test_lfsr_reproducibility() {
+    LFSR_Context ctx;
     printf("Testing LFSR reproducibility...\n");
-    init_lfsr(0x12345678, 0);
-    uint8_t b1 = shift_lfsr_n('L', 8);
-    init_lfsr(0x12345678, 0);
-    uint8_t b2 = shift_lfsr_n('L', 8);
+    init_lfsr(&ctx, 0x12345678, 0);
+    uint8_t b1 = shift_lfsr_n(&ctx, 'L', 8);
+    init_lfsr(&ctx, 0x12345678, 0);
+    uint8_t b2 = shift_lfsr_n(&ctx, 'L', 8);
     if (b1 == b2) printf("OK: LFSR is reproducible.\n");
     else printf("FAIL: LFSR is not reproducible.\n");
 }

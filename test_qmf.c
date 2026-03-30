@@ -4,17 +4,18 @@
 #include <math.h>
 
 int main() {
+    LFSR_Context ctx;
     printf("Starting LFSR Test...\n");
-    init_lfsr(1234567890123456789UL, 0);
-    uint64_t initial_state = 1234567890123456789UL;
+    init_lfsr(&ctx, 1234567890123456789ULL, 0);
+    uint64_t initial_state = 1234567890123456789ULL;
 
     // Simple test for reproducibility
-    int bit1 = shift_lfsr('L');
-    int bit2 = shift_lfsr('L');
+    int bit1 = shift_lfsr(&ctx, 'L');
+    int bit2 = shift_lfsr(&ctx, 'L');
     printf("First two bits (Left): %d, %d\n", bit1, bit2);
 
-    init_lfsr(initial_state, 0);
-    uint8_t byte = shift_lfsr_n('L', 8);
+    init_lfsr(&ctx, initial_state, 0);
+    uint8_t byte = shift_lfsr_n(&ctx, 'L', 8);
     printf("First byte (Left): %02X\n", byte);
 
     printf("LFSR Test Complete.\n");
