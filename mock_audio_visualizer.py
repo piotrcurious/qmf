@@ -1,5 +1,6 @@
 
 import csv
+import math
 
 def generate_svg_analysis(csv_file, svg_file, title, width=800, height=400):
     times = []
@@ -52,7 +53,50 @@ def generate_svg_analysis(csv_file, svg_file, title, width=800, height=400):
 
         f.write('</svg>')
 
+def generate_svg_spectrogram(csv_file, svg_file, title, width=800, height=400):
+    spec = []
+    with open(csv_file, 'r') as f:
+        for line in f:
+            spec.append([float(x) for x in line.split(',')])
+
+    padding = 50
+    num_times = len(spec)
+    num_freqs = len(spec[0])
+
+    max_val = max(max(row) for row in spec)
+
+    def color_map(val):
+        # Hot map
+        intensity = int(255 * min(val / max_val, 1.0))
+        return f'rgb({intensity}, {intensity//2}, {255-intensity})'
+
+    cell_w = (width - 2 * padding) / num_times
+    cell_h = (height - 2 * padding) / num_freqs
+
+    with open(svg_file, 'w') as f:
+        f.write(f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">\n')
+        f.write('<rect width="100%" height="100%" fill="black"/>\n')
+        f.write(f'<text x="{width/2}" y="30" text-anchor="middle" font-weight="bold" font-size="16" fill="white">{title}</text>\n')
+
+        for i in range(num_times):
+            for j in range(num_freqs):
+                val = spec[i][j]
+                if val > 0.01 * max_val: # Filter noise for performance
+                    x = padding + i * cell_w
+                    y = height - padding - (j + 1) * cell_h
+                    f.write(f'<rect x="{x}" y="{y}" width="{cell_w+0.1}" height="{cell_h+0.1}" fill="{color_map(val)}"/>\n')
+
+        # Labels
+        f.write(f'<text x="{padding}" y="{height-padding+20}" fill="white" font-size="10">0s</text>\n')
+        f.write(f'<text x="{width-padding}" y="{height-padding+20}" text-anchor="end" fill="white" font-size="10">1s</text>\n')
+        f.write(f'<text x="{padding-5}" y="{height-padding}" text-anchor="end" fill="white" font-size="10">0Hz</text>\n')
+        f.write(f'<text x="{padding-5}" y="{padding}" text-anchor="end" fill="white" font-size="10">22kHz</text>\n')
+
+        f.write('</svg>')
+
 if __name__ == "__main__":
     generate_svg_analysis('sweep_analysis.csv', 'sweep_analysis.svg', 'Frequency Sweep Analysis (RMS Amplitude)')
     generate_svg_analysis('multitone_analysis.csv', 'multitone_analysis.svg', 'Multi-tone Analysis (RMS Amplitude)')
+    generate_svg_spectrogram('sweep_spec_l.csv', 'sweep_spectrogram_l.svg', 'Spectrogram: Low-pass (Left)')
+    generate_svg_spectrogram('sweep_spec_r.csv', 'sweep_spectrogram_r.svg', 'Spectrogram: High-pass (Right)')
     print("Mock audio visualization complete.")

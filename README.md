@@ -5,7 +5,7 @@ This project provides a complete implementation of a Quadrature Mirror Filter (Q
 - An iterative algorithm to generate orthogonal Daubechies-like filter coefficients.
 - Spectral warping for adjustable split frequencies (`daub_shift`).
 - QMF Analysis (downsampling) and Synthesis (upsampling) banks.
-- A real-time audio processing demo with mock audio hardware simulation.
+- A real-time audio processing demo with mock audio hardware simulation and spectral analysis.
 
 ## Filter Characteristics
 
@@ -32,17 +32,23 @@ This plot compares a complex original signal (sum of sine waves) with its recons
 
 To verify the real-time processing capabilities, the project includes a mock audio hardware simulation system.
 
-### Frequency Sweep Analysis
+### Frequency Sweep Analysis (Time Domain)
 The following plot shows the RMS amplitude of the split output (Low-pass Left, High-pass Right) for a logarithmic frequency sweep from 20Hz to 20kHz.
 - **Left (Blue)**: Low-pass output dominates at low frequencies and rolls off as the sweep crosses the split point.
 - **Right (Red)**: High-pass output increases as the sweep enters the higher frequency range.
 
 ![Frequency Sweep Analysis](sweep_analysis.svg)
 
-### Multi-tone Analysis
-The multi-tone analysis evaluates the filter's behavior when multiple frequencies (e.g., 440Hz, 1000Hz, 5000Hz, 15000Hz) are processed simultaneously.
+### Spectrogram Analysis (Frequency Domain)
+The spectrograms provide a detailed view of the time-frequency intensity for each channel.
 
-![Multi-tone Analysis](multitone_analysis.svg)
+#### Low-pass Output (Left)
+Shows the concentration of signal energy in the lower half of the frequency spectrum.
+![Spectrogram Left](sweep_spectrogram_l.svg)
+
+#### High-pass Output (Right)
+Shows the concentration of signal energy in the upper half of the frequency spectrum.
+![Spectrogram Right](sweep_spectrogram_r.svg)
 
 ## Building and Running
 
@@ -57,7 +63,7 @@ make
 ```
 
 ### Run Tests and Visualizations
-To run the comprehensive test suite and generate all plots (including mock audio simulation):
+To run the comprehensive test suite and generate all plots (including mock audio simulation and spectrograms):
 ```bash
 ./run_mock_test.sh
 ```
@@ -66,8 +72,8 @@ To run the comprehensive test suite and generate all plots (including mock audio
 - `qmf.h` / `qmf.c`: Core library (LFSR, Daubechies, QMF).
 - `audio_demo.c`: Real-time audio processing simulation.
 - `mock_audio_gen.py`: Mock signal generator.
-- `mock_audio_analyzer.py`: Mock output analyzer.
-- `mock_audio_visualizer.py`: SVG plot generator for mock analysis.
+- `mock_audio_analyzer.py`: Mock output analyzer with spectral (FFT) capabilities.
+- `mock_audio_visualizer.py`: SVG plot generator for mock analysis and spectrograms.
 - `gen_data.c`: Generates CSV data for spectral evaluation.
 - `visualize.py`: Python script to convert spectral CSV data to SVG plots.
 - `comprehensive_test.c`: Advanced tests for orthogonality and reconstruction accuracy.
