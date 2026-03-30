@@ -3,7 +3,9 @@
 This project provides a complete implementation of a Quadrature Mirror Filter (QMF) system. It includes:
 - A 64-bit bidirectional Linear Feedback Shift Register (LFSR) for pseudo-random sequence generation.
 - An iterative algorithm to generate orthogonal Daubechies-like filter coefficients.
+- Spectral warping for adjustable split frequencies (`daub_shift`).
 - QMF Analysis (downsampling) and Synthesis (upsampling) banks.
+- A real-time audio processing demo.
 
 ## Filter Characteristics
 
@@ -33,7 +35,7 @@ This plot compares a complex original signal (sum of sine waves) with its recons
 - Python 3 (for visualization)
 
 ### Compile
-To build all components (tests, data generator):
+To build all components (tests, data generator, audio demo):
 ```bash
 make
 ```
@@ -44,14 +46,17 @@ To run the comprehensive test suite:
 ./comprehensive_test
 ```
 
-### Generate Plots
-To generate the latest frequency response and reconstruction plots:
+### Real-Time Audio Demo
+The `audio_demo` program simulates real-time audio splitting. It takes a mono raw double PCM stream and outputs a 16-bit PCM stereo stream (Low-pass on Left, High-pass on Right).
+
+To run the demo:
 ```bash
-make visualize
+./audio_demo input_mono.raw output_stereo.raw
 ```
 
 ## Project Structure
 - `qmf.h` / `qmf.c`: Core library (LFSR, Daubechies, QMF).
+- `audio_demo.c`: Real-time audio processing simulation.
 - `gen_data.c`: Generates CSV data for evaluation.
 - `visualize.py`: Python script to convert CSV data to SVG plots.
 - `test_qmf.c`: Basic integration test.

@@ -129,6 +129,19 @@ void daub(const double *seq, double *h) {
     }
 }
 
+// Generate coefficients with a frequency shift (spectral warping)
+// shift in [-0.5, 0.5] moves the split point
+void daub_shift(const double *seq, double *h, double shift) {
+    daub(seq, h);
+    if (shift == 0) return;
+
+    // Simple spectral warping via modulation
+    for (int i = 0; i < N; i++) {
+        h[i] *= cos(M_PI * shift * i);
+    }
+    normalize(h, N);
+}
+
 // QMF analysis bank implementation
 void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
     // h is the low-pass filter (scaling coefficients)

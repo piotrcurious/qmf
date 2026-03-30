@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2
 LIBS = -lm
 
-TARGETS = test_qmf filter-main comprehensive_test gen_data
+TARGETS = test_qmf filter-main comprehensive_test gen_data audio_demo
 
 all: $(TARGETS)
 
@@ -20,6 +20,9 @@ comprehensive_test: comprehensive_test.c qmf.o
 
 gen_data: gen_data.c qmf.o
 	$(CC) $(CFLAGS) -o gen_data gen_data.c qmf.o $(LIBS)
+
+audio_demo: audio_demo.c qmf.o
+	$(CC) $(CFLAGS) -o audio_demo audio_demo.c qmf.o $(LIBS)
 
 visualize: gen_data
 	./gen_data

@@ -21,6 +21,7 @@ uint8_t shift_lfsr_n(LFSR_Context *ctx, char dir, int n);
 // Core functions
 void normalize(double *vec, int len);
 void daub(const double *seq, double *h);
+void daub_shift(const double *seq, double *h, double shift);
 void qmf(const double *x, int len_x, const double *h, double *yl, double *yh);
 void qmf_synth(const double *yl, const double *yh, int len_y, const double *h, double *xr);
 
