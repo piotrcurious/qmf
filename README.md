@@ -5,7 +5,7 @@ This project provides a complete implementation of a Quadrature Mirror Filter (Q
 - An iterative algorithm to generate orthogonal Daubechies-like filter coefficients.
 - Spectral warping for adjustable split frequencies (`daub_shift`).
 - QMF Analysis (downsampling) and Synthesis (upsampling) banks.
-- A real-time audio processing demo.
+- A real-time audio processing demo with mock audio hardware simulation.
 
 ## Filter Characteristics
 
@@ -28,11 +28,27 @@ This plot compares a complex original signal (sum of sine waves) with its recons
 
 ![Signal Reconstruction](reconstruction.svg)
 
+## Mock Audio Hardware Simulation
+
+To verify the real-time processing capabilities, the project includes a mock audio hardware simulation system.
+
+### Frequency Sweep Analysis
+The following plot shows the RMS amplitude of the split output (Low-pass Left, High-pass Right) for a logarithmic frequency sweep from 20Hz to 20kHz.
+- **Left (Blue)**: Low-pass output dominates at low frequencies and rolls off as the sweep crosses the split point.
+- **Right (Red)**: High-pass output increases as the sweep enters the higher frequency range.
+
+![Frequency Sweep Analysis](sweep_analysis.svg)
+
+### Multi-tone Analysis
+The multi-tone analysis evaluates the filter's behavior when multiple frequencies (e.g., 440Hz, 1000Hz, 5000Hz, 15000Hz) are processed simultaneously.
+
+![Multi-tone Analysis](multitone_analysis.svg)
+
 ## Building and Running
 
 ### Prerequisites
 - GCC (or any standard C compiler)
-- Python 3 (for visualization)
+- Python 3 (for signal generation and visualization)
 
 ### Compile
 To build all components (tests, data generator, audio demo):
@@ -40,25 +56,19 @@ To build all components (tests, data generator, audio demo):
 make
 ```
 
-### Run Tests
-To run the comprehensive test suite:
+### Run Tests and Visualizations
+To run the comprehensive test suite and generate all plots (including mock audio simulation):
 ```bash
-./comprehensive_test
-```
-
-### Real-Time Audio Demo
-The `audio_demo` program simulates real-time audio splitting. It takes a mono raw double PCM stream and outputs a 16-bit PCM stereo stream (Low-pass on Left, High-pass on Right).
-
-To run the demo:
-```bash
-./audio_demo input_mono.raw output_stereo.raw
+./run_mock_test.sh
 ```
 
 ## Project Structure
 - `qmf.h` / `qmf.c`: Core library (LFSR, Daubechies, QMF).
 - `audio_demo.c`: Real-time audio processing simulation.
-- `gen_data.c`: Generates CSV data for evaluation.
-- `visualize.py`: Python script to convert CSV data to SVG plots.
-- `test_qmf.c`: Basic integration test.
+- `mock_audio_gen.py`: Mock signal generator.
+- `mock_audio_analyzer.py`: Mock output analyzer.
+- `mock_audio_visualizer.py`: SVG plot generator for mock analysis.
+- `gen_data.c`: Generates CSV data for spectral evaluation.
+- `visualize.py`: Python script to convert spectral CSV data to SVG plots.
 - `comprehensive_test.c`: Advanced tests for orthogonality and reconstruction accuracy.
-- `filter-main.c`: Simple demonstration application.
+- `Makefile`: Unified build system.
