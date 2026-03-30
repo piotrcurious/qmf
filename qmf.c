@@ -1,151 +1,158 @@
-
-
-// QMF implementation using debauchies wavelet derived from LFSR as core
-
-// Based on https://www.mathworks.com/help/wavelet/ref/dwt.html
-
+#include "qmf.h"
 #include <stdio.h>
-
+#include <stdlib.h>
 #include <math.h>
 
-// Define the LFSR parameters
+// Global state for LFSR
+static uint64_t state;
+static uint32_t pos;
 
-#define POLY 0x80000057 // Polynomial for LFSR
+// Define tap positions for 64-bit LFSR
+#define TAP1 63
+#define TAP2 62
+#define TAP3 60
+#define TAP4 59
 
-#define INIT 0x1        // Initial state for LFSR
+// Define feedback masks for each byte
+#define MASK0 ((1ULL << (TAP1 % 8)) ^ (1ULL << (TAP2 % 8)) ^ (1ULL << (TAP3 % 8)) ^ (1ULL << (TAP4 % 8)))
+#define MASK1 ((MASK0 << 8) | (MASK0 >> (64 - 8)))
+#define MASK2 ((MASK1 << 8) | (MASK1 >> (64 - 8)))
+#define MASK3 ((MASK2 << 8) | (MASK2 >> (64 - 8)))
+#define MASK4 ((MASK3 << 8) | (MASK3 >> (64 - 8)))
+#define MASK5 ((MASK4 << 8) | (MASK4 >> (64 - 8)))
+#define MASK6 ((MASK5 << 8) | (MASK5 >> (64 - 8)))
+#define MASK7 ((MASK6 << 8) | (MASK6 >> (64 - 8)))
 
-#define TAPS 32         // Number of taps for LFSR
+#define LEFT   'L'
+#define RIGHT 'R'
 
-// Define the QMF parameters
-
-#define N 8             // Length of filter coefficients
-
-#define M 4             // Decimation factor
-
-// Define the input signal parameters
-
-#define LEN 64          // Length of input signal
-
-// Function to generate a pseudo-random sequence using LFSR
-
-void lfsr(unsigned int *state, int *seq, int len)
-
-{
-
-    unsigned int lsb; // Least significant bit
-
-    int i;
-
-    for (i = 0; i < len; i++)
-
-    {
-
-        lsb = *state & 1;   // Get LSB (i.e., the output bit).
-
-        seq[i] = lsb;       // Store the output bit in the sequence array.
-
-        *state >>= 1;       // Shift register
-
-        if (lsb)            // If the output bit is 1, apply toggle mask.
-
-            *state ^= POLY;
-
-    }
-
+void init_lfsr(uint64_t seed, uint32_t start_pos) {
+    state = seed;
+    pos = start_pos;
 }
 
-// Function to normalize a vector by its Euclidean norm
-
-void normalize(double *vec, int len)
-
-{
-
-    double norm = 0.0; // Euclidean norm
-
-    int i;
-
-    for (i = 0; i < len; i++)
-
-    {
-
-        norm += vec[i] * vec[i]; // Sum of squares
-
+int shift_lfsr(char dir) {
+    int out_bit;
+    if (dir == LEFT) {
+        out_bit = (state >> TAP1) & 1;
+        state <<= 1;
+        switch (pos / 8) {
+            case 0: state ^= MASK0 & (uint64_t)-(int64_t)out_bit; break;
+            case 1: state ^= MASK1 & (uint64_t)-(int64_t)out_bit; break;
+            case 2: state ^= MASK2 & (uint64_t)-(int64_t)out_bit; break;
+            case 3: state ^= MASK3 & (uint64_t)-(int64_t)out_bit; break;
+            case 4: state ^= MASK4 & (uint64_t)-(int64_t)out_bit; break;
+            case 5: state ^= MASK5 & (uint64_t)-(int64_t)out_bit; break;
+            case 6: state ^= MASK6 & (uint64_t)-(int64_t)out_bit; break;
+            case 7: state ^= MASK7 & (uint64_t)-(int64_t)out_bit; break;
+        }
+        pos = (pos + 1) % 64;
+    } else if (dir == RIGHT) {
+        out_bit = state & 1;
+        state >>= 1;
+        uint64_t mask = 0;
+        switch (pos / 8) {
+            case 0: mask = MASK7; break;
+            case 1: mask = MASK6; break;
+            case 2: mask = MASK5; break;
+            case 3: mask = MASK4; break;
+            case 4: mask = MASK3; break;
+            case 5: mask = MASK2; break;
+            case 6: mask = MASK1; break;
+            case 7: mask = MASK0; break;
+        }
+        if (out_bit) state |= mask;
+        else state &= ~mask;
+        pos = (pos + 63) % 64;
+    } else {
+        return -1;
     }
-
-    norm = sqrt(norm);          // Square root of sum of squares
-
-    for (i = 0; i < len; i++)
-
-    {
-
-        vec[i] /= norm;         // Divide each element by norm
-
-    }
-
+    return out_bit;
 }
 
-// Function to generate debauchies wavelet coefficients from a pseudo-random sequence using Daubechies' algorithm 
-
-void daub(double *h, int n, int *seq)
-
-{
-
-    double beta[n];   // Beta coefficients 
-
-    double alpha[n];  // Alpha coefficients 
-
-    double gamma[n];  // Gamma coefficients 
-
-    double delta[n];  // Delta coefficients 
-
-    double zeta[n/2]; // Zeta coefficients 
-
-    double eta[n/2];  // Eta coefficients 
-
-   
-
-   int i;
-
-   for (i = 0; i < n; i++)
-
-   {
-
-       beta[i] = seq[i] ? -1.0 : 1.0;     // Map sequence to +/-1 values and store in beta array 
-
-   }
-
-   normalize(beta,n);                    // Normalize beta array 
-
-   for (i = n-1; i >= n/2 ; i--)
-
-   {
-
-       alpha[i] = beta[i-n/2] - beta[i];     // Compute alpha array from beta array 
-
-       gamma[i-n/2] = beta[i-n/2] + beta[i];     //
-
-   }
-
-   normalize(alpha,n);                   //
-
-   
-
-   
-
-}
-// Function to perform quadrature mirror filtering using debauchies wavelet coefficients
- void qmf(double *x, double *y, int len_x, int len_y, double *h) { int i, j;
-
-// Convolve and downsample input signal with filter coefficients
-for (i = 0; i < len_y; i++)
-{
-    y[i] = 0.0;
-    for (j = 0; j < N; j++)
-    {
-        if (2*i-j >= 0 && 2*i-j < len_x)
-        {
-            y[i] += x[2*i-j] * h[j];
+uint8_t shift_lfsr_n(char dir, int n) {
+    uint8_t out_byte = 0;
+    for (int i = 0; i < n; i++) {
+        if (dir == LEFT) {
+            out_byte = (out_byte << 1) | shift_lfsr(dir);
+        } else {
+            out_byte = (out_byte >> 1) | (shift_lfsr(dir) << 7);
         }
     }
+    return out_byte;
 }
+
+void normalize(double *vec, int len) {
+    double norm = 0.0;
+    for (int i = 0; i < len; i++) {
+        norm += vec[i] * vec[i];
+    }
+    norm = sqrt(norm);
+    double epsilon = 1e-9;
+    for (int i = 0; i < len; i++) {
+        vec[i] /= (norm + epsilon);
+    }
+}
+
+// Generate Daubechies-like coefficients from a pseudo-random sequence
+// Using a simplified orthogonalization/projection-based approach to generate something resembling D4 or higher if N > 4
+void daub(const double *seq, double *h) {
+    // Start with normalized sequence as base filter
+    for (int i = 0; i < N; i++) {
+        h[i] = seq[i];
+    }
+    normalize(h, N);
+
+    // To be a valid scaling function, sum of coefficients should be sqrt(2)
+    double sum = 0;
+    for (int i = 0; i < N; i++) sum += h[i];
+    double target_sum = sqrt(2.0);
+    double correction = (target_sum - sum) / N;
+    for (int i = 0; i < N; i++) h[i] += correction;
+    normalize(h, N);
+
+    // Iteratively enforce orthogonality to shifts by 2 (QMF condition: sum(h[n]*h[n-2k]) = delta[k])
+    for (int iter = 0; iter < 100; iter++) {
+        for (int k = 1; k < N / 2; k++) {
+            double dot = 0;
+            for (int i = 0; i < N - 2 * k; i++) {
+                dot += h[i] * h[i + 2 * k];
+            }
+            // Simple gradient descent to reduce non-orthogonality
+            for (int i = 0; i < N - 2 * k; i++) {
+                h[i] -= 0.5 * dot * h[i + 2 * k];
+                h[i + 2 * k] -= 0.5 * dot * h[i];
+            }
+        }
+        // Re-enforce sum condition and normalization
+        sum = 0;
+        for (int i = 0; i < N; i++) sum += h[i];
+        correction = (target_sum - sum) / N;
+        for (int i = 0; i < N; i++) h[i] += correction;
+        normalize(h, N);
+    }
+}
+
+// QMF bank implementation
+void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
+    // h is the low-pass filter (scaling coefficients)
+    // g is the high-pass filter (wavelet coefficients)
+    // g[n] = (-1)^n * h[N-1-n]
+    double g[N];
+    for (int i = 0; i < N; i++) {
+        g[i] = ((i % 2) == 0 ? 1 : -1) * h[N - 1 - i];
+    }
+
+    int len_y = len_x / 2;
+    for (int i = 0; i < len_y; i++) {
+        yl[i] = 0;
+        yh[i] = 0;
+        for (int j = 0; j < N; j++) {
+            int idx = 2 * i + 1 - j; // Applying filter with downsampling
+            if (idx >= 0 && idx < len_x) {
+                yl[i] += x[idx] * h[j];
+                yh[i] += x[idx] * g[j];
+            }
+        }
+    }
 }
