@@ -39,9 +39,9 @@ def analyze_output(filename, fs=44100):
         fft_l = fft([complex(s, 0) for s in win_l])
         fft_r = fft([complex(s, 0) for s in win_r])
 
-        # Magnitude (first half)
-        mag_l = [abs(c) for c in fft_l[:window_size // 2]]
-        mag_r = [abs(c) for c in fft_r[:window_size // 2]]
+        # Magnitude (first half), normalized by window size
+        mag_l = [2.0 * abs(c) / window_size for c in fft_l[:window_size // 2]]
+        mag_r = [2.0 * abs(c) / window_size for c in fft_r[:window_size // 2]]
 
         analysis.append({'time': i * window_size / fs, 'rms_l': rms_l, 'rms_r': rms_r})
         spectrogram_l.append(mag_l)
