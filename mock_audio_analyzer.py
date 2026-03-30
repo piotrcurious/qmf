@@ -13,7 +13,7 @@ def fft(x):
            [even[k] - T[k] for k in range(n // 2)]
 
 def analyze_output(filename, fs=44100):
-    """Magnitude and Spectrogram analysis for stereo (Low Left, High Right)"""
+    """Magnitude and Spectrogram analysis with windowing"""
     with open(filename, 'rb') as f:
         data = f.read()
 
@@ -21,27 +21,32 @@ def analyze_output(filename, fs=44100):
     left = [s / 32768.0 for s in samples[0::2]]
     right = [s / 32768.0 for s in samples[1::2]]
 
-    window_size = 512 # Power of 2 for FFT
+    window_size = 512
+    # Hann window for better spectral estimation
+    window = [0.5 * (1 - math.cos(2 * math.pi * i / (window_size - 1))) for i in range(window_size)]
+
     num_windows = len(left) // window_size
     analysis = []
     spectrogram_l = []
     spectrogram_r = []
 
     for i in range(num_windows):
-        win_l = left[i * window_size : (i + 1) * window_size]
-        win_r = right[i * window_size : (i + 1) * window_size]
+        win_l = [left[i * window_size + j] * window[j] for j in range(window_size)]
+        win_r = [right[i * window_size + j] * window[j] for j in range(window_size)]
 
-        # RMS
-        rms_l = math.sqrt(sum(s*s for s in win_l) / window_size)
-        rms_r = math.sqrt(sum(s*s for s in win_r) / window_size)
+        # RMS (unwindowed for accurate envelope)
+        raw_l = left[i * window_size : (i + 1) * window_size]
+        raw_r = right[i * window_size : (i + 1) * window_size]
+        rms_l = math.sqrt(sum(s*s for s in raw_l) / window_size)
+        rms_r = math.sqrt(sum(s*s for s in raw_r) / window_size)
 
         # FFT (complex)
         fft_l = fft([complex(s, 0) for s in win_l])
         fft_r = fft([complex(s, 0) for s in win_r])
 
-        # Magnitude (first half), normalized by window size
-        mag_l = [2.0 * abs(c) / window_size for c in fft_l[:window_size // 2]]
-        mag_r = [2.0 * abs(c) / window_size for c in fft_r[:window_size // 2]]
+        # Magnitude (normalized)
+        mag_l = [abs(c) / (sum(window)/2) for c in fft_l[:window_size // 2]]
+        mag_r = [abs(c) / (sum(window)/2) for c in fft_r[:window_size // 2]]
 
         analysis.append({'time': i * window_size / fs, 'rms_l': rms_l, 'rms_r': rms_r})
         spectrogram_l.append(mag_l)
@@ -66,4 +71,4 @@ if __name__ == "__main__":
         save_analysis(analysis, f'{tag}_analysis.csv')
         save_spectrogram(spec_l, f'{tag}_spec_l.csv')
         save_spectrogram(spec_r, f'{tag}_spec_r.csv')
-    print("Mock audio spectral analysis complete.")
+    print("Robust spectral analysis with Hann windowing complete.")
