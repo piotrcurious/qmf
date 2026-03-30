@@ -108,16 +108,18 @@ void daub(const double *seq, double *h) {
     normalize(h, N);
 
     // Iteratively enforce orthogonality to shifts by 2 (QMF condition: sum(h[n]*h[n-2k]) = delta[k])
-    for (int iter = 0; iter < 100; iter++) {
+    // Increase iterations and refine step size for better convergence
+    for (int iter = 0; iter < 500; iter++) {
         for (int k = 1; k < N / 2; k++) {
             double dot = 0;
             for (int i = 0; i < N - 2 * k; i++) {
                 dot += h[i] * h[i + 2 * k];
             }
-            // Simple gradient descent to reduce non-orthogonality
+            // Gradient descent step
+            double step = 0.1 / (iter / 100.0 + 1.0);
             for (int i = 0; i < N - 2 * k; i++) {
-                h[i] -= 0.5 * dot * h[i + 2 * k];
-                h[i + 2 * k] -= 0.5 * dot * h[i];
+                h[i] -= step * dot * h[i + 2 * k];
+                h[i + 2 * k] -= step * dot * h[i];
             }
         }
         // Re-enforce sum condition and normalization

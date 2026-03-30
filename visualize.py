@@ -33,11 +33,16 @@ def generate_svg_freq_response(csv_file, svg_file, width=800, height=400):
         return height/2 - (p / math.pi) * (height/2 - padding)
 
     with open(svg_file, 'w') as f:
-        f.write(f'<svg width="{width}" height="{height*2}" xmlns="http://www.w3.org/2000/svg">\n')
-        f.write('<rect width="100%" height="100%" fill="#f9f9f9"/>\n')
+        f.write(f'<svg width="{width}" height="{height*2}" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">\n')
+        f.write('<rect width="100%" height="100%" fill="#ffffff"/>\n')
+
+        # Background Grid lines
+        for i in range(11):
+            val = i * 0.1
+            f.write(f'<line x1="{x_map(val/2)}" y1="{padding}" x2="{x_map(val/2)}" y2="{height-padding}" stroke="#eeeeee" stroke-width="1"/>\n')
 
         # Magnitude Graph
-        f.write(f'<text x="{width/2}" y="30" text-anchor="middle" font-weight="bold">Magnitude Response</text>\n')
+        f.write(f'<text x="{width/2}" y="30" text-anchor="middle" font-weight="bold" font-size="16">Frequency Response (Magnitude)</text>\n')
         # Axes
         f.write(f'<line x1="{padding}" y1="{height-padding}" x2="{width-padding}" y2="{height-padding}" stroke="black" stroke-width="2"/>\n')
         f.write(f'<line x1="{padding}" y1="{padding}" x2="{padding}" y2="{height-padding}" stroke="black" stroke-width="2"/>\n')

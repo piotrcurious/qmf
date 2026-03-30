@@ -88,9 +88,28 @@ void test_qmf_reconstruction() {
     printf("MSE (middle part): %f\n", mse/count);
 }
 
+void test_daub_shift() {
+    printf("Testing daub_shift orthogonality and reconstruction...\n");
+    double seq[N] = {1, 1, 1, 1, 1, 1, 1, 1};
+    double h[N];
+    double shift = 0.1;
+    daub_shift(seq, h, shift);
+
+    double norm = 0;
+    for (int i = 0; i < N; i++) norm += h[i]*h[i];
+    printf("Shifted Norm^2: %f (expect 1.0)\n", norm);
+
+    for (int k = 1; k < N/2; k++) {
+        double dot = 0;
+        for (int i = 0; i < N - 2*k; i++) dot += h[i] * h[i+2*k];
+        printf("Shifted Shift %d dot product: %f (expect close to 0.0)\n", 2*k, dot);
+    }
+}
+
 int main() {
     test_lfsr_reproducibility();
     test_orthogonality();
     test_qmf_reconstruction();
+    test_daub_shift();
     return 0;
 }
