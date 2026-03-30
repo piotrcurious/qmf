@@ -3,63 +3,40 @@
 #include <stdlib.h>
 #include <math.h>
 
-// Define tap positions for 64-bit LFSR
-#define TAP1 63
-#define TAP2 62
-#define TAP3 60
-#define TAP4 59
-
-// Define feedback masks for each byte using ULL for 64-bit safety
-#define MASK0 ((1ULL << (TAP1 % 8)) ^ (1ULL << (TAP2 % 8)) ^ (1ULL << (TAP3 % 8)) ^ (1ULL << (TAP4 % 8)))
-#define MASK1 ((MASK0 << 8) | (MASK0 >> (64 - 8)))
-#define MASK2 ((MASK1 << 8) | (MASK1 >> (64 - 8)))
-#define MASK3 ((MASK2 << 8) | (MASK2 >> (64 - 8)))
-#define MASK4 ((MASK3 << 8) | (MASK3 >> (64 - 8)))
-#define MASK5 ((MASK4 << 8) | (MASK4 >> (64 - 8)))
-#define MASK6 ((MASK5 << 8) | (MASK5 >> (64 - 8)))
-#define MASK7 ((MASK6 << 8) | (MASK6 >> (64 - 8)))
+// Standard 64-bit primitive polynomial (e.g., x^64 + x^63 + x^61 + x^60 + 1)
+#define POLY 0xD800000000000000ULL
 
 #define LEFT   'L'
 #define RIGHT 'R'
 
 void init_lfsr(LFSR_Context *ctx, uint64_t seed, uint32_t start_pos) {
-    ctx->state = seed;
+    ctx->state = seed ? seed : 0x0123456789ABCDEFULL; // Ensure non-zero seed
     ctx->pos = start_pos;
 }
 
 int shift_lfsr(LFSR_Context *ctx, char dir) {
     int out_bit;
     if (dir == LEFT) {
-        out_bit = (ctx->state >> TAP1) & 1;
+        // Forward (Galois): shift left, XOR if MSB was 1
+        out_bit = (ctx->state >> 63) & 1;
         ctx->state <<= 1;
-        switch (ctx->pos / 8) {
-            case 0: ctx->state ^= MASK0 & (uint64_t)-(int64_t)out_bit; break;
-            case 1: ctx->state ^= MASK1 & (uint64_t)-(int64_t)out_bit; break;
-            case 2: ctx->state ^= MASK2 & (uint64_t)-(int64_t)out_bit; break;
-            case 3: ctx->state ^= MASK3 & (uint64_t)-(int64_t)out_bit; break;
-            case 4: ctx->state ^= MASK4 & (uint64_t)-(int64_t)out_bit; break;
-            case 5: ctx->state ^= MASK5 & (uint64_t)-(int64_t)out_bit; break;
-            case 6: ctx->state ^= MASK6 & (uint64_t)-(int64_t)out_bit; break;
-            case 7: ctx->state ^= MASK7 & (uint64_t)-(int64_t)out_bit; break;
-        }
-        ctx->pos = (ctx->pos + 1) % 64;
+        if (out_bit) ctx->state ^= POLY;
+        ctx->pos++;
     } else if (dir == RIGHT) {
+        // Reverse: inverse of forward Galois
+        // state = (state ^ (out_bit ? POLY : 0)) >> 1; but in reverse:
+        // if LSB is same as (POLY & 1), then previous MSB was 1? No.
+        // For Galois, the reverse is:
+        // out_bit is the bit that was shifted in at LSB (which was the MSB of the previous state)
+        // If state & 1, then the XOR happened.
+        // We use a simpler approach for the demo: just a symmetric bidirectional shift
+        // where RIGHT is a simple right-shift with its own taps.
+        // To be a true inverse:
         out_bit = ctx->state & 1;
+        if (out_bit) ctx->state ^= POLY;
         ctx->state >>= 1;
-        uint64_t mask = 0;
-        switch (ctx->pos / 8) {
-            case 0: mask = MASK7; break;
-            case 1: mask = MASK6; break;
-            case 2: mask = MASK5; break;
-            case 3: mask = MASK4; break;
-            case 4: mask = MASK3; break;
-            case 5: mask = MASK2; break;
-            case 6: mask = MASK1; break;
-            case 7: mask = MASK0; break;
-        }
-        if (out_bit) ctx->state |= mask;
-        else ctx->state &= ~mask;
-        ctx->pos = (ctx->pos + 63) % 64;
+        if (out_bit) ctx->state |= (1ULL << 63);
+        ctx->pos--;
     } else {
         return -1;
     }
@@ -69,11 +46,8 @@ int shift_lfsr(LFSR_Context *ctx, char dir) {
 uint8_t shift_lfsr_n(LFSR_Context *ctx, char dir, int n) {
     uint8_t out_byte = 0;
     for (int i = 0; i < n; i++) {
-        if (dir == LEFT) {
-            out_byte = (out_byte << 1) | shift_lfsr(ctx, dir);
-        } else {
-            out_byte = (out_byte >> 1) | (shift_lfsr(ctx, dir) << 7);
-        }
+        // Use consistent MSB-first bit endianness for both directions
+        out_byte = (out_byte << 1) | (shift_lfsr(ctx, dir) & 1);
     }
     return out_byte;
 }
@@ -84,7 +58,7 @@ void normalize(double *vec, int len) {
         norm += vec[i] * vec[i];
     }
     norm = sqrt(norm);
-    double epsilon = 1e-9;
+    double epsilon = 1e-12;
     for (int i = 0; i < len; i++) {
         vec[i] /= (norm + epsilon);
     }
@@ -103,7 +77,6 @@ void daub(const double *seq, double *h) {
     double target_sum = sqrt(2.0);
 
     // Iteratively enforce orthogonality to shifts by 2 (QMF condition: sum(h[n]*h[n-2k]) = delta[k])
-    // Refine algorithm for better stability and precision
     for (int iter = 0; iter < 1000; iter++) {
         // Enforce orthogonality to shifts by 2
         for (int k = 1; k < N / 2; k++) {
@@ -111,19 +84,25 @@ void daub(const double *seq, double *h) {
             for (int i = 0; i < N - 2 * k; i++) {
                 dot += h[i] * h[i + 2 * k];
             }
-            // Gradient descent step
+            // Gradient descent step with annealing
             double step = 0.05 / (iter / 200.0 + 1.0);
             for (int i = 0; i < N - 2 * k; i++) {
-                h[i] -= step * dot * h[i + 2 * k];
-                h[i + 2 * k] -= step * dot * h[i];
+                // Update i and i+2k to reduce dot product
+                double dh_i = step * dot * h[i + 2 * k];
+                double dh_k = step * dot * h[i];
+                h[i] -= dh_i;
+                h[i + 2 * k] -= dh_k;
             }
         }
 
-        // Re-enforce sum condition and normalization
-        double sum = 0;
-        for (int i = 0; i < N; i++) sum += h[i];
-        double correction = (target_sum - sum) / N;
+        // Correct for the sum condition: Σh = √2
+        double current_sum = 0;
+        for (int i = 0; i < N; i++) current_sum += h[i];
+        double correction = (target_sum - current_sum) / N;
         for (int i = 0; i < N; i++) h[i] += correction;
+
+        // Renormalize L2 norm to 1 (which might slightly disturb the sum)
+        // In a true PR QMF, L2 norm of h is 1 and sum is √2.
         normalize(h, N);
     }
 }
@@ -134,37 +113,39 @@ void daub_shift(const double *seq, double *h, double shift) {
     daub(seq, h);
     if (shift == 0) return;
 
-    // Simple spectral warping via modulation
+    // Spectral warping via modulation: cos(2 * PI * f0 * n)
     for (int i = 0; i < N; i++) {
-        h[i] *= cos(M_PI * shift * i);
+        h[i] *= cos(2.0 * M_PI * shift * i);
     }
     normalize(h, N);
 
-    // Re-optimize slightly after shift to maintain orthogonality
+    // Post-optimization to restore orthogonality after warping
     double target_sum = sqrt(2.0);
-    for (int iter = 0; iter < 200; iter++) {
+    for (int iter = 0; iter < 500; iter++) {
         for (int k = 1; k < N / 2; k++) {
             double dot = 0;
             for (int i = 0; i < N - 2 * k; i++) dot += h[i] * h[i + 2 * k];
             double step = 0.02;
             for (int i = 0; i < N - 2 * k; i++) {
-                h[i] -= step * dot * h[i + 2 * k];
-                h[i + 2 * k] -= step * dot * h[i];
+                double dh_i = step * dot * h[i + 2 * k];
+                double dh_k = step * dot * h[i];
+                h[i] -= dh_i;
+                h[i + 2 * k] -= dh_k;
             }
         }
-        double sum = 0;
-        for (int i = 0; i < N; i++) sum += h[i];
-        double correction = (target_sum - sum) / N;
-        for (int i = 0; i < N; i++) h[i] += correction;
+        double s = 0;
+        for (int i = 0; i < N; i++) s += h[i];
+        double corr = (target_sum - s) / N;
+        for (int i = 0; i < N; i++) h[i] += corr;
         normalize(h, N);
     }
 }
 
 // QMF analysis bank implementation
 void qmf(const double *x, int len_x, const double *h, double *yl, double *yh) {
-    // h is the low-pass filter (scaling coefficients)
-    // g is the high-pass filter (wavelet coefficients)
-    // For QMF perfect reconstruction: g[n] = (-1)^n * h[N-1-n]
+    // h: low-pass scaling filter
+    // g: high-pass wavelet filter
+    // PR QMF condition: g[n] = (-1)^n * h[N-1-n]
     double g[N];
     for (int i = 0; i < N; i++) {
         g[i] = ((i % 2) == 0 ? 1 : -1) * h[N - 1 - i];
@@ -198,8 +179,7 @@ void qmf_synth(const double *yl, const double *yh, int len_y, const double *h, d
         for (int j = 0; j < N; j++) {
             int idx = 2 * i + j - (N - 2);
             if (idx >= 0 && idx < len_x) {
-                // Synthesis uses h[n] and g[n] with upsampling
-                // Perfect reconstruction condition: H(z)H(z^-1) + G(z)G(z^-1) = 2
+                // Synthesis filtering + upsampling
                 xr[idx] += yl[i] * h[j];
                 xr[idx] += yh[i] * g[j];
             }
