@@ -26,4 +26,4 @@ visualize: gen_data
 	python3 visualize.py
 
 clean:
-	rm -f *.o $(TARGETS) sweep.csv recon.csv sweep.svg recon.svg filter-main.log
+	rm -f *.o $(TARGETS) sweep.csv recon.csv filter-main.log
